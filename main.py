@@ -5,9 +5,7 @@ import discord
 from discord.ext import commands
 from pymongo import MongoClient
 from discord.utils import get
-from password import url, TOKEN, sender_email, password  # make variables in password.py to hold your credentials like
-
-# email id,password and Discord Bot Token
+from password import url, TOKEN, sender_email, password
 
 # Setting up initial parameters for hosting the bot
 intents = discord.Intents.default()
@@ -41,8 +39,6 @@ async def on_member_join(member):
 #     chs = await ctx.guild.fetch_channels()
 #     for x in chs:
 #         await x.set_permissions(muted, read_messages=True, send_messages=False)
-
-
 # function to add muted perms to newly created channels in future
 @bot.event
 async def on_guild_channel_create(channel):
@@ -50,7 +46,6 @@ async def on_guild_channel_create(channel):
     await channel.set_permissions(muted, read_messages=True, send_messages=False)
 
 
-# command to announce some message in a target channel
 @bot.command(name="announce")
 async def announce(ctx, chn: discord.TextChannel, title: str, desc):
     if not get(ctx.guild.roles, name="moderator") in ctx.author.roles and not (
@@ -65,7 +60,6 @@ async def announce(ctx, chn: discord.TextChannel, title: str, desc):
     await chn.send(embed=embed)
 
 
-# command to embed links in a target channel
 @bot.command(name="embed")
 async def announce(ctx, chn: discord.TextChannel, title: str, link: str):
     if not get(ctx.guild.roles, name="moderator") in ctx.author.roles and not (
@@ -141,9 +135,12 @@ async def give_roles(user: discord.Member, guild: discord.Guild):
     await user.add_roles(role)
     verification_code.delete_one(query)
     query = {"discid": user.id}
-    data = temp_data.find_one_and_delete(query)
+    if user_data.count(query) == 0:
+        data = temp_data.find_one_and_delete(query)
+        user_data.insert_one(data)
+    else:
+        data = user_data.find_one(query)
     id = data["id"]
-    user_data.insert_one(data)  # saving the data of user in db
     year = "20" + id[2:4]
     branch = id[4:6]
     if id[4] == 'B':
@@ -168,7 +165,7 @@ async def give_roles(user: discord.Member, guild: discord.Guild):
     else:
         role = get(guild.roles, name="dual-degree")
         await user.add_roles(role)
-        if currentyear - year > 0:
+        if currentyear - int(year) > 0:
             role = get(guild.roles, name=branches[id[6] + id[7]])
             await user.add_roles(role)
 
@@ -176,8 +173,8 @@ async def give_roles(user: discord.Member, guild: discord.Guild):
 # checking if user is verified and then giving roles
 @bot.command(name="submit")
 async def submit(ctx, code):
-    if not ctx.channel.id == 775308388220796978:  # restricting the command to a single channel
-        return  # limiting this command to only one channel is #verification channel
+    # if not ctx.channel.id == 775308388220796978:
+    #     return  # limiting this command to only one channel is #verification channel
     query = {"user": ctx.author.id}
     if verification_code.count_documents(query) == 0:
         await ctx.send("First verify yourself")
@@ -191,8 +188,8 @@ async def submit(ctx, code):
 # function to start the verification process
 @bot.command(name="verify")
 async def verify(ctx, id, *name):
-    if not ctx.channel.id == 775308388220796978:
-        return
+    # if not ctx.channel.id == 775308388220796978:
+    #     return
     query = {"id": id}
     if user_data.count(query) > 0:
         if user_data.find_one(query)["discid"] == ctx.author.id:
@@ -201,8 +198,7 @@ async def verify(ctx, id, *name):
         else:
             await ctx.send("Another user is already registered to this id. If there is some error contact admins")
         return
-    if not re.search(r'[0-9]{4}(A([1-8]|A)|B[1-5])(TS|PS|(A([1-8]|A)))[0-9]{4}H',
-                     id):  # regex function to check if BITS id is right or not
+    if not re.search(r'[0-9]{4}(A([1-8]|A)|B[1-5])(TS|PS|(A([1-8]|A)))[0-9]{4}H', id):
         await ctx.send("Enter valid ID")
         return
     if int(id[0:4]) == currentyear:
@@ -223,11 +219,14 @@ async def verify(ctx, id, *name):
     Subject:Success
 
     Your verification code is:""" + code_generator(ctx.author.id)
+
     try:
         server = smtplib.SMTP(smtp_server, port)
         server.ehlo()
         server.starttls(context=context)
         server.login(sender_email, password)
+
+        # server.sendmail(sender_email, receiver_email, message)
         await ctx.send("Please check ur BITS mail inbox. Use the submit command to verify yourself")
         server.sendmail(sender_email, receiver_email, message)
     except Exception as e:
